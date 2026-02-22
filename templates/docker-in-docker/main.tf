@@ -98,6 +98,17 @@ resource "coder_agent" "main" {
       sudo apt-get install -y nodejs
     fi
 
+    # Install GitHub CLI
+    if ! command -v gh &> /dev/null; then
+      curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+      sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
+      echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+      sudo apt-get update && sudo apt-get install -y gh
+    fi
+
+    # Create default code directory
+    mkdir -p $HOME/code
+
     # --- Claude Code ---
     if ! command -v claude &> /dev/null; then
       curl -fsSL https://claude.ai/install.sh | bash
@@ -112,6 +123,29 @@ resource "coder_agent" "main" {
 
     # --- Cursor Agent ---
     curl -fsSL https://cursor.com/install | bash
+
+    # --- Nix ---
+    if ! command -v nix &> /dev/null; then
+      # Install dependencies required by the Nix installer
+      sudo apt-get update && sudo apt-get install -y xz-utils
+      # Install Nix in single-user mode (suitable for containers)
+      sudo install -d -m 0755 -o coder -g coder /nix
+      sh <(curl -fsSL https://nixos.org/nix/install) --no-daemon
+    fi
+    # Source Nix profile if it exists
+    if [ -f "$HOME/.nix-profile/etc/profile.d/nix.sh" ]; then
+      . "$HOME/.nix-profile/etc/profile.d/nix.sh"
+    fi
+    # Ensure Nix is available in new interactive shells
+    if ! grep -q 'nix.sh' "$HOME/.bashrc" 2>/dev/null; then
+      echo '# Nix' >> "$HOME/.bashrc"
+      echo 'if [ -e "$HOME/.nix-profile/etc/profile.d/nix.sh" ]; then . "$HOME/.nix-profile/etc/profile.d/nix.sh"; fi' >> "$HOME/.bashrc"
+    fi
+    # Enable experimental features (nix develop, nix flake, etc.)
+    mkdir -p "$HOME/.config/nix"
+    if [ ! -f "$HOME/.config/nix/nix.conf" ] || ! grep -q 'experimental-features' "$HOME/.config/nix/nix.conf" 2>/dev/null; then
+      echo 'experimental-features = nix-command flakes' >> "$HOME/.config/nix/nix.conf"
+    fi
 
     # --- Codex CLI ---
     MACHINE_ARCH=$(uname -m)
@@ -139,6 +173,8 @@ resource "coder_agent" "main" {
     GIT_AUTHOR_EMAIL    = "${data.coder_workspace_owner.me.email}"
     GIT_COMMITTER_NAME  = coalesce(data.coder_workspace_owner.me.full_name, data.coder_workspace_owner.me.name)
     GIT_COMMITTER_EMAIL = "${data.coder_workspace_owner.me.email}"
+    NIX_PATH            = "nixpkgs=channel:nixpkgs-unstable"
+    NIX_CONFIG          = "experimental-features = nix-command flakes"
   }
 
   # The following metadata blocks are optional. They are used to display
@@ -274,6 +310,30 @@ resource "docker_volume" "home_volume" {
   }
 }
 
+resource "docker_volume" "nix_volume" {
+  name = "coder-${data.coder_workspace.me.id}-nix"
+  # Protect the volume from being deleted due to changes in attributes.
+  lifecycle {
+    ignore_changes = all
+  }
+  labels {
+    label = "coder.owner"
+    value = data.coder_workspace_owner.me.name
+  }
+  labels {
+    label = "coder.owner_id"
+    value = data.coder_workspace_owner.me.id
+  }
+  labels {
+    label = "coder.workspace_id"
+    value = data.coder_workspace.me.id
+  }
+  labels {
+    label = "coder.workspace_name_at_creation"
+    value = data.coder_workspace.me.name
+  }
+}
+
 resource "docker_volume" "dind_socket" {
   name = "coder-${data.coder_workspace.me.id}-dind-socket"
 }
@@ -319,6 +379,11 @@ resource "docker_container" "workspace" {
   volumes {
     container_path = "/home/coder"
     volume_name    = docker_volume.home_volume.name
+    read_only      = false
+  }
+  volumes {
+    container_path = "/nix"
+    volume_name    = docker_volume.nix_volume.name
     read_only      = false
   }
 
