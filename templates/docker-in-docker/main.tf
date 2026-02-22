@@ -42,6 +42,14 @@ resource "coder_agent" "main" {
       sudo sed -i.bak 's|http://ports.ubuntu.com/ubuntu-ports/|http://ftp.udx.icscoe.jp/Linux/ubuntu-ports/|g' /etc/apt/sources.list.d/ubuntu.sources
     fi
 
+    # Install zsh and set as default shell
+    if ! command -v zsh &> /dev/null; then
+      sudo apt-get update && sudo apt-get install -y zsh
+    fi
+    if [ "$(getent passwd coder | cut -d: -f7)" != "$(which zsh)" ]; then
+      sudo chsh -s $(which zsh) coder
+    fi
+
     # Prepare user home with default files on first start.
     if [ ! -f ~/.init_done ]; then
       cp -rT /etc/skel ~
@@ -132,19 +140,19 @@ resource "coder_agent" "main" {
       sudo install -d -m 0755 -o coder -g coder /nix
       sh <(curl -fsSL https://nixos.org/nix/install) --no-daemon
     fi
-    # Source Nix profile if it exists
+    # Source Nix profile for remaining startup commands
     if [ -f "$HOME/.nix-profile/etc/profile.d/nix.sh" ]; then
       . "$HOME/.nix-profile/etc/profile.d/nix.sh"
-    fi
-    # Ensure Nix is available in new interactive shells
-    if ! grep -q 'nix.sh' "$HOME/.bashrc" 2>/dev/null; then
-      echo '# Nix' >> "$HOME/.bashrc"
-      echo 'if [ -e "$HOME/.nix-profile/etc/profile.d/nix.sh" ]; then . "$HOME/.nix-profile/etc/profile.d/nix.sh"; fi' >> "$HOME/.bashrc"
     fi
     # Enable experimental features (nix develop, nix flake, etc.)
     mkdir -p "$HOME/.config/nix"
     if [ ! -f "$HOME/.config/nix/nix.conf" ] || ! grep -q 'experimental-features' "$HOME/.config/nix/nix.conf" 2>/dev/null; then
       echo 'experimental-features = nix-command flakes' >> "$HOME/.config/nix/nix.conf"
+    fi
+
+    # --- direnv + nix-direnv (install only, shell config is in dotfiles) ---
+    if ! command -v direnv &> /dev/null; then
+      nix profile install nixpkgs#direnv nixpkgs#nix-direnv
     fi
 
     # --- Codex CLI ---
@@ -281,6 +289,14 @@ module "filebrowser" {
   folder   = "/home/coder"
   subdomain  = false
   order      = 2
+}
+
+module "dotfiles" {
+  source   = "registry.coder.com/modules/dotfiles/coder"
+  version  = "~> 1.0"
+  agent_id = coder_agent.main.id
+  dotfiles_uri = "https://github.com/WhatACotton/coder-dind.git"
+  coder_parameter_order = 1000
 }
 
 resource "docker_volume" "home_volume" {

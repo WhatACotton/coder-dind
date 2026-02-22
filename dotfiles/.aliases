@@ -1,0 +1,115 @@
+# =============================================================================
+#  Aliases — てんこ盛り Edition 🍜
+# =============================================================================
+
+# --- Navigation ---
+alias ..="cd .."
+alias ...="cd ../.."
+alias ....="cd ../../.."
+alias ~="cd ~"
+alias -- -="cd -"
+
+# --- ls (use eza if available) ---
+if command -v eza &> /dev/null; then
+  alias ls="eza --icons --group-directories-first"
+  alias ll="eza -la --icons --group-directories-first --git"
+  alias la="eza -a --icons --group-directories-first"
+  alias lt="eza --tree --level=3 --icons --group-directories-first"
+  alias l="eza -l --icons --group-directories-first --git"
+else
+  alias ls="ls --color=auto"
+  alias ll="ls -la"
+  alias la="ls -a"
+  alias l="ls -l"
+fi
+
+# --- cat (use bat if available) ---
+if command -v bat &> /dev/null; then
+  alias cat="bat --paging=never --style=plain"
+  alias catn="bat --paging=never"
+  alias catp="bat"
+fi
+
+# --- grep (use ripgrep if available) ---
+if command -v rg &> /dev/null; then
+  alias grep="rg"
+else
+  alias grep="grep --color=auto"
+fi
+
+# --- find (use fd if available) ---
+if command -v fd &> /dev/null; then
+  alias find="fd"
+fi
+
+# --- Git ---
+alias g="git"
+alias gs="git status -sb"
+alias ga="git add"
+alias gaa="git add --all"
+alias gc="git commit"
+alias gcm="git commit -m"
+alias gca="git commit --amend"
+alias gco="git checkout"
+alias gcb="git checkout -b"
+alias gp="git push"
+alias gpf="git push --force-with-lease"
+alias gpl="git pull --rebase"
+alias gl="git log --oneline --graph --decorate -20"
+alias gla="git log --oneline --graph --decorate --all"
+alias gd="git diff"
+alias gds="git diff --staged"
+alias gb="git branch"
+alias gba="git branch -a"
+alias gst="git stash"
+alias gstp="git stash pop"
+alias grb="git rebase"
+alias grbi="git rebase -i"
+alias gcp="git cherry-pick"
+alias grs="git reset"
+alias grsh="git reset --hard"
+alias gf="git fetch --all --prune"
+alias gw="git worktree"
+
+# --- Docker ---
+alias d="docker"
+alias dc="docker compose"
+alias dcu="docker compose up -d"
+alias dcd="docker compose down"
+alias dcl="docker compose logs -f"
+alias dps="docker ps --format 'table {{.ID}}\t{{.Names}}\t{{.Status}}\t{{.Ports}}'"
+alias dpsa="docker ps -a --format 'table {{.ID}}\t{{.Names}}\t{{.Status}}\t{{.Ports}}'"
+alias di="docker images"
+alias dex="docker exec -it"
+alias dlog="docker logs -f"
+alias dprune="docker system prune -af"
+
+# --- Nix ---
+alias ns="nix search nixpkgs"
+alias ni="nix profile install"
+alias nl="nix profile list"
+alias nr="nix profile remove"
+alias nd="nix develop"
+alias nb="nix build"
+alias nf="nix flake"
+alias nfu="nix flake update"
+alias nfc="nix flake check"
+
+# --- Misc ---
+alias reload="exec zsh"
+alias path='echo -e ${PATH//:/\\n}'
+alias ports="ss -tulanp"
+alias myip="curl -s ifconfig.me"
+alias weather="curl -s wttr.in/Tokyo?format=3"
+alias h="history"
+alias cls="clear"
+alias mk="mkdir -p"
+
+# --- Safety ---
+alias rm="rm -i"
+alias mv="mv -i"
+alias cp="cp -i"
+
+# --- Coder ---
+alias cs="coder ssh"
+alias cw="coder list"

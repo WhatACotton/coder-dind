@@ -1,0 +1,99 @@
+# =============================================================================
+#  Shell Functions
+# =============================================================================
+
+# --- mkcd: create directory and cd into it ---
+mkcd() {
+  mkdir -p "$1" && cd "$1"
+}
+
+# --- extract: universal archive extractor ---
+extract() {
+  if [ -f "$1" ]; then
+    case "$1" in
+      *.tar.bz2) tar xjf "$1"    ;;
+      *.tar.gz)  tar xzf "$1"    ;;
+      *.tar.xz)  tar xJf "$1"    ;;
+      *.bz2)     bunzip2 "$1"    ;;
+      *.rar)     unrar x "$1"    ;;
+      *.gz)      gunzip "$1"     ;;
+      *.tar)     tar xf "$1"     ;;
+      *.tbz2)    tar xjf "$1"    ;;
+      *.tgz)     tar xzf "$1"    ;;
+      *.zip)     unzip "$1"      ;;
+      *.Z)       uncompress "$1" ;;
+      *.7z)      7z x "$1"       ;;
+      *)         echo "'$1' cannot be extracted" ;;
+    esac
+  else
+    echo "'$1' is not a valid file"
+  fi
+}
+
+# --- fh: fuzzy history search ---
+fh() {
+  print -z $( ([ -n "$ZSH_NAME" ] && fc -l 1 || history) | fzf +s --tac | sed -E 's/ *[0-9]*\*? *//' | sed -E 's/\\/\\\\/g')
+}
+
+# --- fp: fuzzy process kill ---
+fp() {
+  local pid
+  pid=$(ps aux | fzf --header='Select process to kill' | awk '{print $2}')
+  if [ -n "$pid" ]; then
+    echo "Killing PID $pid..."
+    kill -9 "$pid"
+  fi
+}
+
+# --- fe: fuzzy file edit ---
+fe() {
+  local file
+  file=$(fzf --preview 'bat --color=always --style=numbers --line-range=:80 {}' --preview-window=right:60%)
+  if [ -n "$file" ]; then
+    ${EDITOR:-vim} "$file"
+  fi
+}
+
+# --- gig: generate .gitignore from gitignore.io ---
+gig() {
+  curl -sL "https://www.toptal.com/developers/gitignore/api/$*"
+}
+
+# --- weather: detailed weather info ---
+wttr() {
+  curl -s "wttr.in/${1:-Tokyo}"
+}
+
+# --- tre: tree with color and pager ---
+tre() {
+  if command -v eza &> /dev/null; then
+    eza --tree --level="${1:-3}" --icons --group-directories-first --color=always | less -R
+  else
+    tree -C -L "${1:-3}" | less -R
+  fi
+}
+
+# --- docker-cleanup: remove all stopped containers, dangling images, unused networks ---
+docker-cleanup() {
+  echo "Removing stopped containers..."
+  docker container prune -f
+  echo "Removing dangling images..."
+  docker image prune -f
+  echo "Removing unused networks..."
+  docker network prune -f
+  echo "✅ Docker cleanup complete!"
+}
+
+# --- port: show what's listening on a given port ---
+port() {
+  if [ -z "$1" ]; then
+    echo "Usage: port <port_number>"
+    return 1
+  fi
+  ss -tulanp | grep ":$1"
+}
+
+# --- cheat: cheat.sh quick reference ---
+cheat() {
+  curl -s "cheat.sh/$*"
+}
