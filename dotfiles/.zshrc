@@ -41,11 +41,16 @@ zinit light MichaelAquilina/zsh-you-should-use
 
 autoload -Uz compinit
 # Speed up compinit: only check cache once a day
-if [[ -n ${ZDOTDIR}/.zcompdump(#qN.mh+24) ]]; then
-  compinit
+_zcompdump="${ZDOTDIR:-$HOME}/.zcompdump"
+if [[ -n $_zcompdump(#qN.mh+24) ]]; then
+  compinit -d "$_zcompdump"
 else
-  compinit -C
+  compinit -C -d "$_zcompdump"
 fi
+unset _zcompdump
+
+# Replay zinit cached completions (must be after compinit)
+zinit cdreplay -q
 
 # Case-insensitive matching
 zstyle ':completion:*' matcher-list 'm:{a-zA-Z}={A-Za-z}' 'r:|=*' 'l:|=* r:|=*'
@@ -63,6 +68,8 @@ zstyle ':completion:*:warnings' format '%F{red}── no matches found ──%f'
 # fzf-tab settings
 zstyle ':fzf-tab:complete:cd:*' fzf-preview 'eza -1 --color=always $realpath 2>/dev/null || ls -1 --color=always $realpath'
 zstyle ':fzf-tab:complete:*:*' fzf-preview 'bat --color=always --style=numbers --line-range=:80 $realpath 2>/dev/null || cat $realpath 2>/dev/null || eza -1 --color=always $realpath 2>/dev/null'
+# Disable fzf-tab for simple single-match completions (only show fzf when multiple matches)
+zstyle ':fzf-tab:*' fzf-min-height 5
 
 # =============================================================================
 #  History
