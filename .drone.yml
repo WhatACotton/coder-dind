@@ -20,4 +20,5 @@ steps:
     commands:
       - apk add --no-cache curl
       - curl -fsSL https://coder.com/install.sh | sh
+      - coder login "$CODER_URL" --token "$CODER_SESSION_TOKEN"
       - coder templates push docker --directory ./templates/docker-in-docker --yes
