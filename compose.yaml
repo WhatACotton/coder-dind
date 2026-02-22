@@ -28,6 +28,8 @@ services:
     volumes:
       - dind_socket:/var/run
       - dind_data:/var/lib/docker
+    dns:
+      - 127.0.0.11
     healthcheck:
       test: ["CMD", "docker", "info"]
       interval: 5s
@@ -60,4 +62,3 @@ volumes:
   coder_home:
   dind_socket:
   dind_data:
-  

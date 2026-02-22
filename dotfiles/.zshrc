@@ -30,7 +30,7 @@ zinit light Aloxaf/fzf-tab
 zinit light hlissner/zsh-autopair
 
 # You-should-use: reminds you of existing aliases
-zinit light MichaelAqwordzz/zsh-you-should-use
+zinit light MichaelAquilina/zsh-you-should-use
 
 # Fast syntax highlighting (additional layer)
 # zinit light zdharma-continuum/fast-syntax-highlighting
