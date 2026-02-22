@@ -1,0 +1,21 @@
+---
+kind: pipeline
+type: docker
+name: deploy-coder-template
+
+trigger:
+  branch:
+    - main
+  event:
+    - push
+
+steps:
+  - name: push-template
+    image: ghcr.io/coder/coder:latest
+    environment:
+      CODER_URL:
+        from_secret: coder_url
+      CODER_SESSION_TOKEN:
+        from_secret: coder_session_token
+    commands:
+      - coder templates push docker --directory ./templates/docker-in-docker --yes
