@@ -136,6 +136,8 @@ resource "coder_agent" "main" {
     if ! command -v nix &> /dev/null; then
       # Install dependencies required by the Nix installer
       sudo apt-get update && sudo apt-get install -y xz-utils
+      # Clean up incompatible profile state from previous installs
+      rm -rf "$HOME/.local/state/nix" "$HOME/.nix-profile" "$HOME/.nix-defexpr" "$HOME/.nix-channels"
       # Install Nix in single-user mode (suitable for containers)
       sudo install -d -m 0755 -o coder -g coder /nix
       sh <(curl -fsSL https://nixos.org/nix/install) --no-daemon
