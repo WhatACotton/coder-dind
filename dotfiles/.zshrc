@@ -11,20 +11,14 @@ fi
 source "$ZINIT_HOME/zinit.zsh"
 
 # =============================================================================
-#  Plugins
+#  Plugins (load order matters!)
 # =============================================================================
 
-# Syntax highlighting (must be loaded before autosuggestions in some setups)
-zinit light zsh-users/zsh-syntax-highlighting
+# Additional completions (must be before compinit)
+zinit light zsh-users/zsh-completions
 
 # Autosuggestions (fish-like)
 zinit light zsh-users/zsh-autosuggestions
-
-# Additional completions
-zinit light zsh-users/zsh-completions
-
-# fzf-tab: replace zsh default completion with fzf
-zinit light Aloxaf/fzf-tab
 
 # Autopair brackets/quotes
 zinit light hlissner/zsh-autopair
@@ -32,15 +26,11 @@ zinit light hlissner/zsh-autopair
 # You-should-use: reminds you of existing aliases
 zinit light MichaelAquilina/zsh-you-should-use
 
-# Fast syntax highlighting (additional layer)
-# zinit light zdharma-continuum/fast-syntax-highlighting
-
 # =============================================================================
 #  Completion System
 # =============================================================================
 
 autoload -Uz compinit
-# Speed up compinit: only check cache once a day
 _zcompdump="${ZDOTDIR:-$HOME}/.zcompdump"
 if [[ -n $_zcompdump(#qN.mh+24) ]]; then
   compinit -d "$_zcompdump"
@@ -49,13 +39,13 @@ else
 fi
 unset _zcompdump
 
-# Replay zinit cached completions (must be after compinit)
+# Replay zinit cached completions
 zinit cdreplay -q
 
 # Case-insensitive matching
 zstyle ':completion:*' matcher-list 'm:{a-zA-Z}={A-Za-z}' 'r:|=*' 'l:|=* r:|=*'
 
-# Colorful completion menus
+# Menu selection with arrow keys
 zstyle ':completion:*' menu select
 zstyle ':completion:*' list-colors "${(s.:.)LS_COLORS}"
 
@@ -65,11 +55,15 @@ zstyle ':completion:*:descriptions' format '%F{yellow}── %d ──%f'
 zstyle ':completion:*:messages' format '%F{purple}── %d ──%f'
 zstyle ':completion:*:warnings' format '%F{red}── no matches found ──%f'
 
-# fzf-tab settings
-zstyle ':fzf-tab:complete:cd:*' fzf-preview 'eza -1 --color=always $realpath 2>/dev/null || ls -1 --color=always $realpath'
-zstyle ':fzf-tab:complete:*:*' fzf-preview 'bat --color=always --style=numbers --line-range=:80 $realpath 2>/dev/null || cat $realpath 2>/dev/null || eza -1 --color=always $realpath 2>/dev/null'
-# Disable fzf-tab for simple single-match completions (only show fzf when multiple matches)
-zstyle ':fzf-tab:*' fzf-min-height 5
+# fzf-tab (only if fzf is available)
+if command -v fzf &> /dev/null; then
+  zinit light Aloxaf/fzf-tab
+  zstyle ':fzf-tab:complete:cd:*' fzf-preview 'eza -1 --color=always $realpath 2>/dev/null || ls -1 --color=always $realpath'
+  zstyle ':fzf-tab:*' fzf-min-height 5
+fi
+
+# Syntax highlighting (must be last plugin)
+zinit light zsh-users/zsh-syntax-highlighting
 
 # =============================================================================
 #  History

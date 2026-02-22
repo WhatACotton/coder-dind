@@ -22,3 +22,10 @@ steps:
       - curl -fsSL https://coder.com/install.sh | sh
       - coder login "$CODER_URL" --token "$CODER_SESSION_TOKEN"
       - coder templates push docker --directory ./templates/docker-in-docker --yes
+      # Update all running workspaces using this template
+      - |
+        echo "==> Updating running workspaces..."
+        for ws in $(coder list -c workspace --output text 2>/dev/null | tail -n +2); do
+          echo "==> Updating workspace: $ws"
+          coder restart "$ws" -y 2>&1 || echo "  (skipped: $ws)"
+        done
