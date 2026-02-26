@@ -362,7 +362,7 @@ resource "docker_container" "dind" {
   privileged = true
   name       = "dind-${data.coder_workspace.me.id}"
   entrypoint = ["sh", "-c"]
-  command    = ["addgroup -g 1000 coder && rm -f /var/run/docker.pid && exec dockerd -H unix:///var/run/docker.sock --group coder"]
+  command    = ["addgroup -g 1000 coder 2>/dev/null || true && rm -f /var/run/docker.pid /var/run/docker/containerd/containerd.pid && exec dockerd -H unix:///var/run/docker.sock --group coder"]
   
   volumes {
     volume_name    = docker_volume.dind_socket.name

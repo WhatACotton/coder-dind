@@ -1,6 +1,7 @@
 services:
   coder:
     image: ${CODER_REPO:-ghcr.io/coder/coder}:${CODER_VERSION:-latest}
+    restart: unless-stopped
     network_mode: "service:dind"
     environment:
       CODER_PG_CONNECTION_URL: "postgresql://${POSTGRES_USER:-username}:${POSTGRES_PASSWORD:-password}@database/${POSTGRES_DB:-coder}?sslmode=disable"
@@ -19,12 +20,13 @@ services:
         condition: service_healthy
   dind:
     image: "docker:dind"
+    restart: unless-stopped
     privileged: true
     ports:
       - "7080:7080"
     entrypoint: ["sh", "-c"]
     command: 
-      - "addgroup -g 1000 coder && rm -f /var/run/docker.pid /var/run/docker/containerd/containerd.pid && exec dockerd -H unix:///var/run/docker.sock --group coder"
+      - "addgroup -g 1000 coder 2>/dev/null || true && rm -f /var/run/docker.pid /var/run/docker/containerd/containerd.pid && exec dockerd -H unix:///var/run/docker.sock --group coder"
     volumes:
       - dind_socket:/var/run
       - dind_data:/var/lib/docker
@@ -39,6 +41,7 @@ services:
     # Minimum supported version is 13.
     # More versions here: https://hub.docker.com/_/postgres
     image: "postgres:17"
+    restart: unless-stopped
     # Uncomment the next two lines to allow connections to the database from outside the server.
     #ports:
     #  - "5432:5432"
