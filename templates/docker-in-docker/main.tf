@@ -160,6 +160,12 @@ resource "coder_agent" "main" {
       nix profile install nixpkgs#direnv nixpkgs#nix-direnv
     fi
 
+    # --- Tailscale ---
+    if ! command -v tailscale &> /dev/null; then
+      curl -fsSL https://tailscale.com/install.sh | sh
+    fi
+    sudo tailscaled --tun=userspace-networking --socks5-server=localhost:1055 --outbound-http-proxy-listen=localhost:1055 > /tmp/tailscaled.log 2>&1 &
+
     # --- Codex CLI ---
     MACHINE_ARCH=$(uname -m)
     case "$MACHINE_ARCH" in
