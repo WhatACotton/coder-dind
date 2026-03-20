@@ -452,6 +452,11 @@ resource "docker_container" "workspace" {
     container_path = "/run/udev"
     read_only      = true
   }
+  # USB passthrough for FPGA JTAG programming (Xilinx/Digilent cables)
+  volumes {
+    host_path      = "/dev/bus/usb"
+    container_path = "/dev/bus/usb"
+  }
 
   # Add labels in Docker to keep track of orphan resources.
   labels {
