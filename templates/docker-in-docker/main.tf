@@ -355,6 +355,20 @@ resource "docker_volume" "nix_volume" {
   }
 }
 
+resource "docker_volume" "vivado" {
+  name = "vivado"
+  driver = "local"
+  driver_opts = {
+    type   = "none"
+    o      = "bind"
+    device = "/mnt/sda1"
+  }
+  lifecycle {
+    prevent_destroy = true
+    ignore_changes  = all
+  }
+}
+
 resource "docker_volume" "dind_socket" {
   name = "coder-${data.coder_workspace.me.id}-dind-socket"
 }
@@ -374,7 +388,7 @@ resource "docker_container" "dind" {
     read_only      = false
   }
   volumes {
-    host_path      = "/mnt/sda1"
+    volume_name    = docker_volume.vivado.name
     container_path = "/mnt/vivado"
     read_only      = false
   }
@@ -415,7 +429,7 @@ resource "docker_container" "workspace" {
     read_only      = false
   }
   volumes {
-    host_path      = "/mnt/sda1"
+    volume_name    = docker_volume.vivado.name
     container_path = "/mnt/vivado"
     read_only      = false
   }

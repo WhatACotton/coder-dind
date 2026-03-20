@@ -29,11 +29,16 @@ services:
     ports:
       - "7080:7080"
     entrypoint: ["sh", "-c"]
-    command: 
+    command:
       - "addgroup -g 1000 coder 2>/dev/null || true && rm -f /var/run/docker.pid /var/run/docker/containerd/containerd.pid && exec dockerd -H unix:///var/run/docker.sock --group coder"
     volumes:
       - dind_socket:/var/run
       - dind_data:/var/lib/docker
+      - type: bind
+        source: /mnt/sda1
+        target: /mnt/sda1
+        bind:
+          propagation: rslave
     dns:
       - 10.240.255.254
       - 8.8.8.8
