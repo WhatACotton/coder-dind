@@ -129,6 +129,9 @@ resource "coder_agent" "main" {
     # --- Copilot CLI (npm) ---
     sudo npm install -g @github/copilot
 
+    # --- OpenClaw ---
+    sudo npm install -g openclaw@latest
+
     # --- Cursor Agent ---
     curl -fsSL https://cursor.com/install | bash
 
@@ -362,11 +365,17 @@ resource "docker_container" "dind" {
   privileged = true
   name       = "dind-${data.coder_workspace.me.id}"
   entrypoint = ["sh", "-c"]
-  command    = ["addgroup -g 1000 coder 2>/dev/null || true && rm -f /var/run/docker.pid /var/run/docker/containerd/containerd.pid && exec dockerd -H unix:///var/run/docker.sock --group coder"]
+  # MTU 1400 to prevent "message too long" errors with WireGuard/tailnet in nested Docker
+  command    = ["addgroup -g 1000 coder 2>/dev/null || true && rm -f /var/run/docker.pid /var/run/docker/containerd/containerd.pid && exec dockerd -H unix:///var/run/docker.sock --group coder --mtu=1400"]
   
   volumes {
     volume_name    = docker_volume.dind_socket.name
     container_path = "/var/run"
+    read_only      = false
+  }
+  volumes {
+    host_path      = "/mnt/sda1"
+    container_path = "/mnt/vivado"
     read_only      = false
   }
 }
@@ -378,12 +387,18 @@ resource "docker_container" "workspace" {
   name = "coder-${data.coder_workspace_owner.me.name}-${lower(data.coder_workspace.me.name)}"
   # Hostname makes the shell more user friendly: coder@my-workspace:~$
   hostname = data.coder_workspace.me.name
-  # Use the docker gateway if the access URL is 127.0.0.1
-  entrypoint = ["sh", "-c", replace(coder_agent.main.init_script, "/localhost|127\\.0\\.0\\.1/", "host.docker.internal")]
+  # Auto-restart on agent crash (workaround for Issue #20338)
+  restart = "unless-stopped"
+  # Use the docker gateway if the access URL is 127.0.0.1 or host IP to avoid hairpin NAT
+  # Disable devcontainer detection (port 4) to prevent agent crashes - it can't reach Docker properly in nested dind
+  entrypoint = ["sh", "-c", "export CODER_AGENT_DEVCONTAINERS_ENABLE=0; ${replace(coder_agent.main.init_script, "/localhost|127\\.0\\.0\\.1|10\\.240\\.255\\.70/", "host.docker.internal")}"]
 
   env = [
     "CODER_AGENT_TOKEN=${coder_agent.main.token}",
-    "DOCKER_HOST=unix:///var/run/docker-host/docker.sock"
+    "DOCKER_HOST=unix:///var/run/docker-host/docker.sock",
+    "CODER_AGENT_DEVCONTAINERS_ENABLE=0",
+    # Force DERP-only, disable direct P2P attempts (impossible in nested Docker, causes "message too long" errors)
+    "CODER_AGENT_DISABLE_DIRECT=true"
   ]
   host {
     host = "host.docker.internal"
@@ -397,6 +412,11 @@ resource "docker_container" "workspace" {
   volumes {
     container_path = "/home/coder"
     volume_name    = docker_volume.home_volume.name
+    read_only      = false
+  }
+  volumes {
+    host_path      = "/mnt/sda1"
+    container_path = "/mnt/vivado"
     read_only      = false
   }
   volumes {

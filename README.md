@@ -29,11 +29,28 @@ Coder は `network_mode: "service:dind"` で DinD とネットワーク名前空
 > **Warning**
 > DinD は `privileged: true` で動くのでコンテナ分離は効かない。個人利用・検証用途向け。信頼できないユーザーがいる環境には向かない。
 
-### 既知の制限: RAM Usage が取得できない
+### 既知の制限
+
+#### RAM Usage が取得できない
 
 DinD 内のコンテナでは cgroup v2 が threaded モードになるため、`coder stat mem` でコンテナのメモリ使用率を取得できない。ダッシュボードの RAM Usage 欄はエラー表示になる。
 
 ![RAM Usage エラー](ram_usage.png)
+
+#### Devcontainer 検出を無効化している理由 (ワークスペース突然死対策)
+
+Coder v2.24.0 以降、エージェントの devcontainer 検出機能がデフォルトで有効になった。この機能はエージェント内部の Container API (port 4) で `docker ps` / `docker inspect` を実行してコンテナを探すが、**nested DinD 環境ではこの API が正常に応答できない**。
+
+coderd サーバーや Web UI からの Container API リクエストが毎回 30 秒タイムアウトし、これが積み重なるとエージェントの tailnet (WireGuard) 接続を圧迫する。特に VSCode 接続時は container 関連の API コールが増えるため、接続後 2〜3 分でエージェントの context がキャンセルされワークスペースが突然死する。
+
+**対策:** テンプレートの entrypoint で agent 起動前に `CODER_AGENT_DEVCONTAINERS_ENABLE=0` を export して、この機能を無効化している。
+
+```hcl
+# templates/docker-in-docker/main.tf
+entrypoint = ["sh", "-c", "export CODER_AGENT_DEVCONTAINERS_ENABLE=0; ${replace(...)}"]
+```
+
+> この問題は Coder 側で nested DinD への対応が改善されれば不要になる可能性がある。
 
 ## CLI セットアップ
 

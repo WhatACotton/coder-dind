@@ -8,6 +8,10 @@ services:
       CODER_HTTP_ADDRESS: "0.0.0.0:7080"
       CODER_ACCESS_URL: "${CODER_ACCESS_URL:-http://localhost:7080}"
       DOCKER_HOST: "unix:///var/run/docker-host/docker.sock"
+      # Force WebSocket for DERP relay (more stable in nested Docker)
+      CODER_DERP_FORCE_WEBSOCKETS: "true"
+      # Disable STUN - P2P is impossible in nested Docker, avoid "message too long" errors
+      CODER_DERP_SERVER_STUN_ADDRESSES: "disable"
     group_add:
      - "1000" # docker group on dind
     volumes:
@@ -31,7 +35,8 @@ services:
       - dind_socket:/var/run
       - dind_data:/var/lib/docker
     dns:
-      - 127.0.0.11
+      - 10.240.255.254
+      - 8.8.8.8
     healthcheck:
       test: ["CMD", "docker", "info"]
       interval: 5s
