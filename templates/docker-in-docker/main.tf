@@ -444,6 +444,14 @@ resource "docker_container" "workspace" {
     volume_name    = docker_volume.nix_volume.name
     read_only      = false
   }
+  # Vivado license manager needs udev for device enumeration (MAC address).
+  # Without this, Vivado launch_runs crashes with realloc() in libudev
+  # when udev_enumerate_scan_devices() finds no device database.
+  volumes {
+    host_path      = "/run/udev"
+    container_path = "/run/udev"
+    read_only      = true
+  }
 
   # Add labels in Docker to keep track of orphan resources.
   labels {
