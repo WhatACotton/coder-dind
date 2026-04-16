@@ -181,6 +181,21 @@ resource "coder_agent" "main" {
     sudo mv /usr/local/bin/codex-$${CODEX_ARCH}-unknown-linux-musl /usr/local/bin/codex
     rm codex-$${CODEX_ARCH}-unknown-linux-musl.tar.gz
 
+    # --- Agent log collection (for Grafana) ---
+    mkdir -p /home/coder/logs
+    touch /home/coder/logs/agent.log
+
+    mkdir -p /home/coder/bin
+    cat > /home/coder/bin/claude-run <<'WRAPPER'
+    #!/bin/bash
+    mkdir -p /home/coder/logs
+    PROJECT=$(basename "$PWD")
+    TIMESTAMP=$(date +%H%M%S)
+    INDIVIDUAL_LOG="/home/coder/logs/$${PROJECT}-$${TIMESTAMP}.log"
+    exec claude "$@" 2>&1 | tee -a "$INDIVIDUAL_LOG" /home/coder/logs/agent.log
+    WRAPPER
+    chmod +x /home/coder/bin/claude-run
+
   EOT
 
   # These environment variables allow you to make Git commits right away after creating a
@@ -279,6 +294,16 @@ resource "coder_app" "code-server" {
     interval  = 5
     threshold = 6
   }
+}
+
+resource "coder_app" "agent_log" {
+  count        = data.coder_workspace.me.start_count
+  agent_id     = coder_agent.main.id
+  slug         = "agent-log"
+  display_name = "Agent Log"
+  icon         = "/icon/terminal.svg"
+  command      = "/bin/bash -c 'tail -n 200 -f /home/coder/logs/agent.log'"
+  order        = 3
 }
 
 # See https://registry.coder.com/modules/coder/jetbrains
