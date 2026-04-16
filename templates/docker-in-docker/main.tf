@@ -490,6 +490,13 @@ resource "docker_container" "workspace" {
     host = "host.docker.internal"
     ip   = "host-gateway"
   }
+  # Expose ttyd (web shell) to dind's network, which is forwarded to the
+  # host tailnet via compose.yaml ports. Grafana embeds http://<host>:7681.
+  ports {
+    internal = 7681
+    external = 7681
+    ip       = "0.0.0.0"
+  }
   volumes {
     volume_name    = docker_volume.dind_socket.name
     container_path = "/var/run/docker-host"
