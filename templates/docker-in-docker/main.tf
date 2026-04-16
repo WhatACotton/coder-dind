@@ -65,9 +65,9 @@ resource "coder_agent" "main" {
       sudo sed -i.bak 's|http://ports.ubuntu.com/ubuntu-ports/|http://ftp.udx.icscoe.jp/Linux/ubuntu-ports/|g' /etc/apt/sources.list.d/ubuntu.sources
     fi
 
-    # Install zsh and set as default shell
-    if ! command -v zsh &> /dev/null; then
-      sudo apt-get update && sudo apt-get install -y zsh
+    # Install zsh, screen and set zsh as default shell
+    if ! command -v zsh &> /dev/null || ! command -v screen &> /dev/null; then
+      sudo apt-get update && sudo apt-get install -y zsh screen
     fi
     if [ "$(getent passwd coder | cut -d: -f7)" != "$(which zsh)" ]; then
       sudo chsh -s $(which zsh) coder
@@ -143,8 +143,13 @@ resource "coder_agent" "main" {
     # --- Claude Code ---
     if ! command -v claude &> /dev/null; then
       curl -fsSL https://claude.ai/install.sh | bash
-      export PATH="$HOME/.local/bin:$HOME/.claude/bin:$PATH"
     fi
+    # Persist claude / user-local bin on PATH for every shell (login + non-login)
+    sudo tee /etc/profile.d/claude.sh >/dev/null <<'PROFILE'
+    export PATH="$HOME/.local/bin:$HOME/.claude/bin:$PATH"
+    PROFILE
+    sudo chmod 0644 /etc/profile.d/claude.sh
+    export PATH="$HOME/.local/bin:$HOME/.claude/bin:$PATH"
 
     # --- Gemini CLI (npm) ---
     sudo npm install -g @google/gemini-cli
