@@ -32,6 +32,9 @@ resource "coder_agent" "main" {
   arch           = data.coder_provisioner.me.arch
   os             = "linux"
   startup_script = <<-EOT
+    # Strip NUL bytes from all script output; Coder agent ships logs to
+    # postgres (UTF8) and any 0x00 byte crashes the agent.
+    exec > >(tr -d '\0') 2> >(tr -d '\0' >&2)
     set -e
 
     # Change apt mirror to Japanese mirror
