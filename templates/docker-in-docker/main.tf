@@ -196,6 +196,26 @@ resource "coder_agent" "main" {
     WRAPPER
     chmod +x /home/coder/bin/claude-run
 
+    # --- ttyd (web shell, embedded in Grafana via coder_app) ---
+    if ! command -v ttyd &> /dev/null; then
+      TTYD_ARCH=$(uname -m)
+      curl -fsSL "https://github.com/tsl0922/ttyd/releases/latest/download/ttyd.$${TTYD_ARCH}" -o /tmp/ttyd
+      sudo install -m 0755 /tmp/ttyd /usr/local/bin/ttyd
+      rm -f /tmp/ttyd
+    fi
+    if [ ! -f /home/coder/.ttyd-auth ]; then
+      umask 077
+      printf 'coder:%s\n' "$(openssl rand -base64 18 | tr -d '/+=' | head -c 24)" > /home/coder/.ttyd-auth
+      echo "ttyd credentials generated at /home/coder/.ttyd-auth"
+    fi
+    pkill -f 'ttyd --port 7681' || true
+    nohup ttyd \
+      --port 7681 \
+      --interface 0.0.0.0 \
+      --credential "$(cat /home/coder/.ttyd-auth)" \
+      --writable \
+      bash > /home/coder/logs/ttyd.log 2>&1 &
+
   EOT
 
   # These environment variables allow you to make Git commits right away after creating a
@@ -304,6 +324,24 @@ resource "coder_app" "agent_log" {
   icon         = "/icon/terminal.svg"
   command      = "/bin/bash -c 'tail -n 200 -f /home/coder/logs/agent.log'"
   order        = 3
+}
+
+resource "coder_app" "web_shell" {
+  count        = data.coder_workspace.me.start_count
+  agent_id     = coder_agent.main.id
+  slug         = "web-shell"
+  display_name = "Web Shell"
+  url          = "http://localhost:7681"
+  icon         = "/icon/terminal.svg"
+  subdomain    = false
+  share        = "public"
+  order        = 4
+
+  healthcheck {
+    url       = "http://localhost:7681"
+    interval  = 10
+    threshold = 3
+  }
 }
 
 # See https://registry.coder.com/modules/coder/jetbrains
