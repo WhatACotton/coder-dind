@@ -15,6 +15,8 @@ services:
       # Allow Grafana (metrics server) to embed Coder apps in iframes.
       # Set CODER_IFRAME_ALLOW_ORIGINS in .env to the Grafana origin, e.g. http://<tailscale-ip>:3000
       CODER_IFRAME_ALLOW_ORIGINS: "${CODER_IFRAME_ALLOW_ORIGINS}"
+      # Allow long-lived admin API tokens (e.g. for CI) up to 5 years.
+      CODER_MAX_ADMIN_TOKEN_LIFETIME: "43800h"
     group_add:
      - "1000" # docker group on dind
     volumes:
