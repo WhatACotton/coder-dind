@@ -34,6 +34,7 @@ services:
     ports:
       - "7080:7080"
       - "7681:7681"
+      - "7682:7682"
     entrypoint: ["sh", "-c"]
     command:
       - "addgroup -g 1000 coder 2>/dev/null || true && rm -f /var/run/docker.pid /var/run/docker/containerd/containerd.pid && exec dockerd -H unix:///var/run/docker.sock --group coder"

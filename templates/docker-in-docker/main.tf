@@ -535,6 +535,12 @@ resource "docker_container" "workspace" {
     external = 7681
     ip       = "0.0.0.0"
   }
+  # Secondary workspace port forwarded the same way as 7681.
+  ports {
+    internal = 7682
+    external = 7682
+    ip       = "0.0.0.0"
+  }
   volumes {
     volume_name    = docker_volume.dind_socket.name
     container_path = "/var/run/docker-host"
