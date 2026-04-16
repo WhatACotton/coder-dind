@@ -224,6 +224,39 @@ resource "coder_agent" "main" {
     WRAPPER
     chmod +x /home/coder/bin/claude-run
 
+    # --- screen defaults + slog wrapper ---
+    cat > /home/coder/.screenrc <<'SCRC'
+    defscrollback 50000
+    logfile /home/coder/logs/screen-%S-%n.log
+    SCRC
+
+    sudo tee /usr/local/bin/slog >/dev/null <<'SLOG'
+    #!/bin/bash
+    # slog — screen + logging wrapper (writes to /home/coder/logs/ so host promtail picks it up)
+    #   slog new <name> <cmd...>    detached, logged
+    #   slog run <name> <cmd...>    attached, logged
+    #   slog ls                     sessions + log files
+    #   slog tail <name>            tail -f
+    #   slog cat  <name>            less
+    #   slog peek <name>            hardcopy + scrollback dump (no attach)
+    #   slog attach <name>          re-attach
+    set -eu
+    LOGDIR=/home/coder/logs
+    mkdir -p "$LOGDIR"
+    logfile() { echo "$LOGDIR/screen-$1.log"; }
+    case "$${1:-}" in
+      new)    shift; name=$1; shift; screen -dmS "$name" -L -Logfile "$(logfile "$name")" "$@"; echo "started: $name  log: $(logfile "$name")";;
+      run)    shift; name=$1; shift; screen -S "$name" -L -Logfile "$(logfile "$name")" "$@";;
+      ls)     screen -ls || true; echo '---'; ls -la "$LOGDIR"/screen-*.log 2>/dev/null || echo 'no log files';;
+      tail)   shift; tail -n 200 -f "$(logfile "$1")";;
+      cat)    shift; less "$(logfile "$1")";;
+      peek)   shift; out=$(mktemp); screen -S "$1" -X hardcopy -h "$out"; less "$out"; rm -f "$out";;
+      attach) shift; screen -r "$1";;
+      *)      sed -n '2,11p' "$0" | sed 's/^# \?//'; exit 1;;
+    esac
+    SLOG
+    sudo chmod 0755 /usr/local/bin/slog
+
   EOT
 
   # These environment variables allow you to make Git commits right away after creating a
