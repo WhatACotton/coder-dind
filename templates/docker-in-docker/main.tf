@@ -48,7 +48,7 @@ resource "coder_agent" "main" {
       printf 'coder:%s\n' "$(openssl rand -base64 18 | tr -d '/+=' | head -c 24)" > /home/coder/.ttyd-auth
       echo "ttyd credentials generated at /home/coder/.ttyd-auth"
     fi
-    pkill -f 'ttyd --port 7681' 2>/dev/null || true
+    pkill -x ttyd 2>/dev/null || true
     nohup ttyd \
       --port 7681 \
       --interface 0.0.0.0 \
