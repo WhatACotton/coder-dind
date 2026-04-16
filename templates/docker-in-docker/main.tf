@@ -174,9 +174,9 @@ resource "coder_agent" "main" {
       *)       echo "Unsupported architecture: $MACHINE_ARCH"; exit 1 ;;
     esac
     cd /tmp
-    curl -sSL $(curl -s https://api.github.com/repos/openai/codex/releases/latest | \
-      jq -r '.assets[] | select(.name | contains("'"$CODEX_ARCH"'") and endswith("unknown-linux-musl.tar.gz") and (contains("codex-responses-api-proxy") | not)) | .browser_download_url') \
-      -o codex-$${CODEX_ARCH}-unknown-linux-musl.tar.gz
+    CODEX_URL=$(curl -s https://api.github.com/repos/openai/codex/releases/latest | \
+      jq -r '.assets[] | select(.name | startswith("codex-'"$CODEX_ARCH"'") and endswith("unknown-linux-musl.tar.gz")) | .browser_download_url' | head -1)
+    curl -fsSL "$CODEX_URL" -o codex-$${CODEX_ARCH}-unknown-linux-musl.tar.gz
     sudo tar -zxvf codex-$${CODEX_ARCH}-unknown-linux-musl.tar.gz -C /usr/local/bin
     sudo mv /usr/local/bin/codex-$${CODEX_ARCH}-unknown-linux-musl /usr/local/bin/codex
     rm codex-$${CODEX_ARCH}-unknown-linux-musl.tar.gz
