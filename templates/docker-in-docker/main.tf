@@ -58,13 +58,14 @@ resource "coder_agent" "main" {
       bash -l > /home/coder/logs/ttyd.log 2>&1 &
     disown || true
 
-    # --- readonly viewer on 7682: waits for a screen session named "build" and attaches ---
+    # --- readonly viewer on 7682: tails the latest screen-build log (full history + live) ---
     mkdir -p /home/coder/bin
     cat > /home/coder/bin/shell-viewer <<'VIEWER'
     #!/bin/bash
     while true; do
-      if screen -ls 2>/dev/null | grep -qE '[0-9]+\.build[[:space:]]'; then
-        exec screen -x build
+      latest=$(ls -t /home/coder/logs/screen-build*.log 2>/dev/null | head -1)
+      if [ -n "$latest" ]; then
+        exec tail -n +1 -F "$latest"
       fi
       sleep 2
     done
