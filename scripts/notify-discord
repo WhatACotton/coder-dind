@@ -1,0 +1,113 @@
+#!/usr/bin/env bash
+# notify-discord — send a Discord webhook embed built from stdin.
+#
+# Reads the embed description from stdin; metadata via CLI flags.
+# Spec: .claude/spec/webhook.md §3.2
+#
+# The sender knows nothing about how the body was produced (summarize,
+# echo, grafana alert, anything). Keep it that way.
+
+set -uo pipefail
+
+usage() {
+  cat >&2 <<EOF
+Usage: $(basename "$0") --title <text> [--status <int>] [--color <int>]
+                       [--url <webhook>] [--timestamp <iso8601>]
+
+Reads the embed description (body) from stdin.
+
+Environment:
+  DISCORD_WEBHOOK_URL  Webhook URL (required unless --url is given)
+  DISCORD_TIMEOUT      curl timeout in seconds (default 10)
+
+Exit codes:
+  0  success (2xx from Discord)
+  1  invalid arguments
+  2  webhook URL not set
+  3  send failure (network / 4xx / 5xx)
+EOF
+}
+
+title=""
+status=""
+color=""
+url="${DISCORD_WEBHOOK_URL:-}"
+timestamp=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --title)     title=${2:-}; shift 2 ;;
+    --status)    status=${2:-}; shift 2 ;;
+    --color)     color=${2:-}; shift 2 ;;
+    --url)       url=${2:-}; shift 2 ;;
+    --timestamp) timestamp=${2:-}; shift 2 ;;
+    -h|--help)   usage; exit 0 ;;
+    *)           echo "unknown option: $1" >&2; usage; exit 1 ;;
+  esac
+done
+
+if [[ -z "$title" ]]; then
+  echo "--title is required" >&2
+  usage
+  exit 1
+fi
+if [[ -z "$url" ]]; then
+  echo "webhook URL not set (DISCORD_WEBHOOK_URL or --url)" >&2
+  exit 2
+fi
+if [[ -z "$timestamp" ]]; then
+  timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+fi
+
+# Derive emoji + color from status when --color isn't explicit.
+emoji="ℹ️"
+resolved_color=3447003  # blue (neutral / status unspecified)
+if [[ -n "$status" ]]; then
+  if [[ "$status" == "0" ]]; then
+    emoji="✅"
+    resolved_color=3066993   # green
+  else
+    emoji="❌"
+    resolved_color=15158332  # red
+  fi
+fi
+if [[ -n "$color" ]]; then
+  resolved_color="$color"
+fi
+
+# Read stdin body; trim to Discord's 4096-char description limit.
+body=$(cat)
+if (( ${#body} > 4096 )); then
+  body="${body:0:4093}..."
+fi
+
+# jq handles escaping — never build JSON by string concatenation.
+payload=$(jq -n \
+  --arg title "$emoji $title" \
+  --arg description "$body" \
+  --argjson color "$resolved_color" \
+  --arg timestamp "$timestamp" \
+  '{embeds: [{title: $title, description: $description, color: $color, timestamp: $timestamp}]}')
+
+timeout_s="${DISCORD_TIMEOUT:-10}"
+tmp=$(mktemp -t notify-discord.XXXXXX)
+trap 'rm -f "$tmp"' EXIT
+
+http_code=$(curl -sS \
+  --max-time "$timeout_s" \
+  -o "$tmp" \
+  -w '%{http_code}' \
+  -H 'Content-Type: application/json' \
+  -X POST \
+  -d "$payload" \
+  "$url" 2>>"$tmp" || true)
+
+if [[ "$http_code" =~ ^2 ]]; then
+  exit 0
+fi
+
+echo "notify-discord: send failed (http=${http_code:-n/a})" >&2
+if [[ -s "$tmp" ]]; then
+  sed 's/^/notify-discord: /' "$tmp" >&2
+fi
+exit 3

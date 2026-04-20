@@ -255,6 +255,15 @@ resource "coder_agent" "main" {
     WRAPPER
     chmod +x /home/coder/bin/claude-run
 
+    # --- notify-discord (Discord Webhook sender) ---
+    # Source in scripts/notify-discord at repo root. Pulled here so workspace
+    # Claude / CI scripts can call it without re-cloning the templates repo.
+    if [ ! -x /usr/local/bin/notify-discord ]; then
+      sudo curl -fsSL https://raw.githubusercontent.com/WhatACotton/coder-dind/main/scripts/notify-discord \
+        -o /usr/local/bin/notify-discord
+      sudo chmod 0755 /usr/local/bin/notify-discord
+    fi
+
     # --- screen defaults + slog wrapper ---
     cat > /home/coder/.screenrc <<'SCRC'
     defscrollback 50000
