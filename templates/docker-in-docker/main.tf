@@ -58,6 +58,28 @@ resource "coder_agent" "main" {
       bash -l > /home/coder/logs/ttyd.log 2>&1 &
     disown || true
 
+    # --- readonly viewer on 7682: waits for a screen session named "build" and attaches ---
+    mkdir -p /home/coder/bin
+    cat > /home/coder/bin/shell-viewer <<'VIEWER'
+    #!/bin/bash
+    while true; do
+      if screen -ls 2>/dev/null | grep -qE '[0-9]+\.build[[:space:]]'; then
+        exec screen -x build
+      fi
+      sleep 2
+    done
+    VIEWER
+    chmod +x /home/coder/bin/shell-viewer
+
+    ro_pid=$(ss -tlnp 2>/dev/null | awk '/:7682 /{sub(".*pid=","",$NF); sub(",.*","",$NF); print $NF; exit}')
+    [ -n "$ro_pid" ] && kill "$ro_pid" 2>/dev/null && sleep 1
+    nohup ttyd \
+      --port 7682 \
+      --interface 0.0.0.0 \
+      --credential "$(cat /home/coder/.ttyd-auth)" \
+      /home/coder/bin/shell-viewer > /home/coder/logs/ttyd-ro.log 2>&1 &
+    disown || true
+
     # Change apt mirror to Japanese mirror
     ARCH=$(dpkg --print-architecture)
     if [ "$ARCH" = "amd64" ]; then
