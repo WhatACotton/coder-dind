@@ -51,8 +51,18 @@ if [[ -z "$title" ]]; then
   usage
   exit 1
 fi
+# Fall back to ~/.env when neither --url nor DISCORD_WEBHOOK_URL was provided;
+# convenient for non-interactive shells (Claude Code, cron, CI) that don't
+# source shell rc files.
+if [[ -z "$url" && -f "$HOME/.env" ]]; then
+  set -a
+  # shellcheck disable=SC1091
+  . "$HOME/.env"
+  set +a
+  url="${DISCORD_WEBHOOK_URL:-$url}"
+fi
 if [[ -z "$url" ]]; then
-  echo "webhook URL not set (DISCORD_WEBHOOK_URL or --url)" >&2
+  echo "webhook URL not set (DISCORD_WEBHOOK_URL or --url or ~/.env)" >&2
   exit 2
 fi
 if [[ -z "$timestamp" ]]; then
