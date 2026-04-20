@@ -255,16 +255,15 @@ resource "coder_agent" "main" {
     WRAPPER
     chmod +x /home/coder/bin/claude-run
 
-    # --- notify-discord (Discord Webhook sender) ---
-    # Source in scripts/notify-discord at repo root. Pulled here so workspace
-    # Claude / CI scripts can call it without re-cloning the templates repo.
-    if [ ! -x /usr/local/bin/notify-discord ]; then
-      sudo curl -fsSL https://raw.githubusercontent.com/WhatACotton/coder-dind/main/scripts/notify-discord \
-        -o /usr/local/bin/notify-discord
-      sudo chmod 0755 /usr/local/bin/notify-discord
-    fi
-    # Tell workspace-side Claude how to use notify-discord. Written every boot
-    # so the doc stays in sync with the template; edit via the template.
+    # --- agent tooling pulled from the templates repo ---
+    # Shared pattern: always refresh so tools track main; no pin/cache.
+    for tool in notify-discord grafana-cli; do
+      sudo curl -fsSL "https://raw.githubusercontent.com/WhatACotton/coder-dind/main/scripts/$tool" \
+        -o "/usr/local/bin/$tool"
+      sudo chmod 0755 "/usr/local/bin/$tool"
+    done
+    # Tell workspace-side Claude how to use the pulled-in tools. Rewritten
+    # every boot so docs track the template; edit via the heredoc.
     mkdir -p /home/coder/.claude
     cat > /home/coder/.claude/CLAUDE.md <<'CLAUDEMD'
     # Workspace conventions
@@ -296,6 +295,24 @@ resource "coder_agent" "main" {
     - Log or echo the webhook URL (it is a secret).
     - Commit `~/.env`.
     - Spam — at most a few per task; avoid one per build step.
+
+    ## Grafana API (grafana-cli)
+
+    `/usr/local/bin/grafana-cli` is a thin wrapper around the Grafana HTTP API
+    for the metrics server at `http://100.64.0.34:3000`. Auth token and URL
+    are loaded from `~/.env` (GRAFANA_URL, GRAFANA_TOKEN).
+
+    Subcommands (see `grafana-cli --help`):
+    - `whoami` — verify auth
+    - `folder-list` / `folder-get <uid>`
+    - `dashboard-list --folder <uid>` / `dashboard-get <uid>`
+    - `dashboard-upsert` (stdin = JSON body)
+    - `dashboard-delete <uid>`
+    - `datasource-list`
+
+    The service account token is scoped to the `agent-managed` folder only.
+    Never POST/DELETE outside that folder — the reconciler spec
+    (.claude/spec/grafana.md) defines the boundary.
     CLAUDEMD
     chmod 0644 /home/coder/.claude/CLAUDE.md
 
