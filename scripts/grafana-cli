@@ -76,8 +76,8 @@ call() {
     esac
   done
 
-  local tmp; tmp=$(mktemp -t grafana-cli.XXXXXX)
-  trap 'rm -f "$tmp"' RETURN
+  local tmp rc=0 http_code=""
+  tmp=$(mktemp -t grafana-cli.XXXXXX)
 
   local args=(
     -sS
@@ -93,21 +93,24 @@ call() {
   fi
   args+=( "$GRAFANA_URL$path" )
 
-  local http_code
   if ! http_code=$(curl "${args[@]}" 2>>"$tmp"); then
     echo "grafana-cli: curl failed to reach $GRAFANA_URL" >&2
     [[ -s "$tmp" ]] && sed 's/^/grafana-cli: /' "$tmp" >&2
+    rm -f "$tmp"
     return 2
   fi
 
   cat "$tmp"
 
   case "$http_code" in
-    2??) return 0 ;;
-    401|403) echo "grafana-cli: auth failure ($http_code)" >&2; return 3 ;;
-    '') echo "grafana-cli: no HTTP response" >&2; return 2 ;;
-    *) echo "grafana-cli: $method $path -> $http_code" >&2; return 4 ;;
+    2??) rc=0 ;;
+    401|403) echo "grafana-cli: auth failure ($http_code)" >&2; rc=3 ;;
+    '') echo "grafana-cli: no HTTP response" >&2; rc=2 ;;
+    *) echo "grafana-cli: $method $path -> $http_code" >&2; rc=4 ;;
   esac
+
+  rm -f "$tmp"
+  return "$rc"
 }
 
 sub_whoami() { call GET /api/user; }
