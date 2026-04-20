@@ -49,12 +49,13 @@ resource "coder_agent" "main" {
       echo "ttyd credentials generated at /home/coder/.ttyd-auth"
     fi
     pkill -x ttyd 2>/dev/null || true
+    # bash -l = login shell so /etc/profile.d/*.sh (claude PATH, nix, etc.) apply
     nohup ttyd \
       --port 7681 \
       --interface 0.0.0.0 \
       --credential "$(cat /home/coder/.ttyd-auth)" \
       --writable \
-      bash > /home/coder/logs/ttyd.log 2>&1 &
+      bash -l > /home/coder/logs/ttyd.log 2>&1 &
     disown || true
 
     # Change apt mirror to Japanese mirror
@@ -177,6 +178,13 @@ resource "coder_agent" "main" {
     if [ -f "$HOME/.nix-profile/etc/profile.d/nix.sh" ]; then
       . "$HOME/.nix-profile/etc/profile.d/nix.sh"
     fi
+    # Make nix profile available to every login shell (ttyd, ssh, etc.)
+    sudo tee /etc/profile.d/nix.sh >/dev/null <<'PROFILE'
+    if [ -f "$HOME/.nix-profile/etc/profile.d/nix.sh" ]; then
+      . "$HOME/.nix-profile/etc/profile.d/nix.sh"
+    fi
+    PROFILE
+    sudo chmod 0644 /etc/profile.d/nix.sh
     # Enable experimental features (nix develop, nix flake, etc.)
     mkdir -p "$HOME/.config/nix"
     if [ ! -f "$HOME/.config/nix/nix.conf" ] || ! grep -q 'experimental-features' "$HOME/.config/nix/nix.conf" 2>/dev/null; then
