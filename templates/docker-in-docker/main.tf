@@ -263,6 +263,41 @@ resource "coder_agent" "main" {
         -o /usr/local/bin/notify-discord
       sudo chmod 0755 /usr/local/bin/notify-discord
     fi
+    # Tell workspace-side Claude how to use notify-discord. Written every boot
+    # so the doc stays in sync with the template; edit via the template.
+    mkdir -p /home/coder/.claude
+    cat > /home/coder/.claude/CLAUDE.md <<'CLAUDEMD'
+    # Workspace conventions
+
+    ## Discord notifications (notify-discord)
+
+    Use `/usr/local/bin/notify-discord` to push a status message to the user's
+    Discord channel when a long-running task finishes or when you want to
+    surface a result outside of this chat session.
+
+    - Webhook URL is loaded from `~/.env` automatically — do not pass `--url`.
+    - Body goes on stdin; keep it short (the message is trimmed to 4096 chars).
+    - Always pass `--title` and `--status` (`0` = success ✅ green, non-zero = failure ❌ red).
+
+    Example:
+
+    ```bash
+    echo "vivado build done in 12m34s (WNS 0.123ns)" \
+      | notify-discord --title "vivado-build-042" --status 0
+    ```
+
+    When to use:
+    - The user kicked off a long job and asked you to notify on completion.
+    - A background task you started has finished or errored.
+    - You discovered something the user likely wants to know even if they're
+      away from this chat.
+
+    Do not:
+    - Log or echo the webhook URL (it is a secret).
+    - Commit `~/.env`.
+    - Spam — at most a few per task; avoid one per build step.
+    CLAUDEMD
+    chmod 0644 /home/coder/.claude/CLAUDE.md
 
     # --- screen defaults + slog wrapper ---
     cat > /home/coder/.screenrc <<'SCRC'
