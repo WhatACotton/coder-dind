@@ -1,0 +1,184 @@
+#!/usr/bin/env bash
+# grafana-cli — thin wrapper around the Grafana HTTP API.
+#
+# Spec: .claude/spec/grafana.md §4.2
+# No logic, no folder-boundary enforcement — the caller (reconciler) is
+# responsible for staying inside agent-managed. This script just maps
+# subcommands to API routes and prints the response as-is.
+
+set -uo pipefail
+
+usage() {
+  cat >&2 <<'EOF'
+Usage: grafana-cli <subcommand> [args...]
+
+Subcommands:
+  whoami                         GET /api/user
+  folder-list                    GET /api/folders
+  folder-get <uid>               GET /api/folders/<uid>
+  dashboard-list --folder <uid>  GET /api/search?folderUIDs=<uid>
+  dashboard-get <uid>            GET /api/dashboards/uid/<uid>
+  dashboard-upsert               POST /api/dashboards/db  (stdin = JSON body)
+  dashboard-delete <uid>         DELETE /api/dashboards/uid/<uid>
+  datasource-list                GET /api/datasources
+
+Environment:
+  GRAFANA_URL      Base URL (default http://localhost:3000)
+  GRAFANA_TOKEN    Service account token (required)
+  GRAFANA_TIMEOUT  curl timeout in seconds (default 10)
+
+Exit codes:
+  0  success
+  1  invalid arguments
+  2  Grafana unreachable
+  3  auth failure (401/403)
+  4  other 4xx/5xx
+EOF
+}
+
+# Fall back to ~/.config/grafana-agent/env (per spec §8.1) and ~/.env in that
+# order when the token isn't set. Convenient for Claude / cron / ad-hoc use.
+load_env_file() {
+  local f="$1"
+  if [[ -f "$f" ]]; then
+    set -a
+    # shellcheck disable=SC1090
+    . "$f"
+    set +a
+  fi
+}
+if [[ -z "${GRAFANA_TOKEN:-}" ]]; then
+  load_env_file "$HOME/.config/grafana-agent/env"
+fi
+if [[ -z "${GRAFANA_TOKEN:-}" ]]; then
+  load_env_file "$HOME/.env"
+fi
+
+GRAFANA_URL="${GRAFANA_URL:-http://localhost:3000}"
+GRAFANA_TIMEOUT="${GRAFANA_TIMEOUT:-10}"
+
+require_token() {
+  if [[ -z "${GRAFANA_TOKEN:-}" ]]; then
+    echo "grafana-cli: GRAFANA_TOKEN is required (set env or ~/.config/grafana-agent/env or ~/.env)" >&2
+    exit 1
+  fi
+}
+
+# call <METHOD> <PATH> [--body <data>]
+# Always prints the response body; translates HTTP status into an exit code.
+call() {
+  local method="$1" path="$2"; shift 2
+  local body=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --body) body=$2; shift 2 ;;
+      *) echo "call: unexpected arg $1" >&2; return 1 ;;
+    esac
+  done
+
+  local tmp; tmp=$(mktemp -t grafana-cli.XXXXXX)
+  trap 'rm -f "$tmp"' RETURN
+
+  local args=(
+    -sS
+    --max-time "$GRAFANA_TIMEOUT"
+    -o "$tmp"
+    -w '%{http_code}'
+    -H "Authorization: Bearer $GRAFANA_TOKEN"
+    -H 'Accept: application/json'
+    -X "$method"
+  )
+  if [[ -n "$body" ]]; then
+    args+=( -H 'Content-Type: application/json' --data-binary "$body" )
+  fi
+  args+=( "$GRAFANA_URL$path" )
+
+  local http_code
+  if ! http_code=$(curl "${args[@]}" 2>>"$tmp"); then
+    echo "grafana-cli: curl failed to reach $GRAFANA_URL" >&2
+    [[ -s "$tmp" ]] && sed 's/^/grafana-cli: /' "$tmp" >&2
+    return 2
+  fi
+
+  cat "$tmp"
+
+  case "$http_code" in
+    2??) return 0 ;;
+    401|403) echo "grafana-cli: auth failure ($http_code)" >&2; return 3 ;;
+    '') echo "grafana-cli: no HTTP response" >&2; return 2 ;;
+    *) echo "grafana-cli: $method $path -> $http_code" >&2; return 4 ;;
+  esac
+}
+
+sub_whoami() { call GET /api/user; }
+sub_folder_list() { call GET /api/folders; }
+
+sub_folder_get() {
+  local uid="${1:-}"; [[ -z "$uid" ]] && { echo "folder-get: uid required" >&2; usage; exit 1; }
+  call GET "/api/folders/$uid"
+}
+
+sub_dashboard_list() {
+  local folder=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --folder) folder=$2; shift 2 ;;
+      *) echo "dashboard-list: unknown option $1" >&2; usage; exit 1 ;;
+    esac
+  done
+  if [[ -n "$folder" ]]; then
+    call GET "/api/search?folderUIDs=$folder"
+  else
+    call GET '/api/search?type=dash-db'
+  fi
+}
+
+sub_dashboard_get() {
+  local uid="${1:-}"; [[ -z "$uid" ]] && { echo "dashboard-get: uid required" >&2; usage; exit 1; }
+  call GET "/api/dashboards/uid/$uid"
+}
+
+sub_dashboard_upsert() {
+  local input; input=$(cat)
+  if [[ -z "$input" ]]; then
+    echo "dashboard-upsert: empty stdin; expected JSON body" >&2
+    exit 1
+  fi
+  if ! echo "$input" | jq -e . >/dev/null 2>&1; then
+    echo "dashboard-upsert: stdin is not valid JSON" >&2
+    exit 1
+  fi
+  # Accept either a bare dashboard JSON or the full {dashboard,folderUid,overwrite}
+  # envelope. If the input lacks "dashboard", wrap it.
+  local payload
+  if echo "$input" | jq -e 'has("dashboard")' >/dev/null 2>&1; then
+    payload="$input"
+  else
+    payload=$(jq -n --argjson d "$input" '{dashboard: $d, overwrite: true}')
+  fi
+  call POST /api/dashboards/db --body "$payload"
+}
+
+sub_dashboard_delete() {
+  local uid="${1:-}"; [[ -z "$uid" ]] && { echo "dashboard-delete: uid required" >&2; usage; exit 1; }
+  call DELETE "/api/dashboards/uid/$uid"
+}
+
+sub_datasource_list() { call GET /api/datasources; }
+
+cmd="${1:-}"
+[[ -z "$cmd" ]] && { usage; exit 1; }
+shift || true
+
+case "$cmd" in
+  -h|--help|help)   usage; exit 0 ;;
+  whoami)           require_token; sub_whoami "$@" ;;
+  folder-list)      require_token; sub_folder_list "$@" ;;
+  folder-get)       require_token; sub_folder_get "$@" ;;
+  dashboard-list)   require_token; sub_dashboard_list "$@" ;;
+  dashboard-get)    require_token; sub_dashboard_get "$@" ;;
+  dashboard-upsert) require_token; sub_dashboard_upsert "$@" ;;
+  dashboard-delete) require_token; sub_dashboard_delete "$@" ;;
+  datasource-list)  require_token; sub_datasource_list "$@" ;;
+  *) echo "grafana-cli: unknown subcommand: $cmd" >&2; usage; exit 1 ;;
+esac
