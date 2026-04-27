@@ -58,14 +58,17 @@ resource "coder_agent" "main" {
       bash -l > /home/coder/logs/ttyd.log 2>&1 &
     disown || true
 
-    # --- readonly viewer on 7682: tails the latest screen-build log (full history + live) ---
+    # --- readonly viewer on 7682: tails the latest screen-build log (recent + live) ---
+    # Streaming the entire file blows up the browser; cap at the last N lines
+    # by default. Override per-session with VIEWER_TAIL_LINES.
     mkdir -p /home/coder/bin
     cat > /home/coder/bin/shell-viewer <<'VIEWER'
     #!/bin/bash
+    : "$${VIEWER_TAIL_LINES:=2000}"
     while true; do
       latest=$(ls -t /home/coder/logs/screen-build*.log 2>/dev/null | head -1)
       if [ -n "$latest" ]; then
-        exec tail -n +1 -F "$latest"
+        exec tail -n "$VIEWER_TAIL_LINES" -F "$latest"
       fi
       sleep 2
     done
